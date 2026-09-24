@@ -1,0 +1,25 @@
+{
+	"schemaVersion": 1,
+	"id": "adventuremap",
+	"version": "${version}",
+	"name": "Carte de l'aventurier",
+	"description": "Une carte au trésor qui suit la progression de chaque joueur : régions, routes d'objectifs, sceaux et récompenses.",
+	"authors": ["nistroy"],
+	"contact": {
+		"sources": "https://github.com/Nistroy/minecraft-adventure-map",
+		"issues": "https://github.com/Nistroy/minecraft-adventure-map/issues"
+	},
+	"license": "GPL-3.0-only",
+	"icon": "assets/adventuremap/textures/item/adventurer_map.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["io.github.nistroy.adventuremap.AdventureMap"],
+		"client": ["io.github.nistroy.adventuremap.client.AdventureMapClient"]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

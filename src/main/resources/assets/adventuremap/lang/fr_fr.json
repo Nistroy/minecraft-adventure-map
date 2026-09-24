@@ -1,0 +1,5 @@
+{
+  "item.adventuremap.adventurer_map": "Carte de l'aventurier",
+  "item.adventuremap.adventurer_map.tooltip": "Clic droit pour l'ouvrir",
+  "item.adventuremap.adventurer_map.lost": "Perdue ? Tape /carte"
+}

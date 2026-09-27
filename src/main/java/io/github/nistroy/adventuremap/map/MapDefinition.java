@@ -41,6 +41,13 @@ public final class MapDefinition {
                 regionOfNode.put(node.id(), region);
             }
         }
+        for (Region region : this.regions) {
+            for (MapNode node : region.nodes()) {
+                if (node.x() <= 0 || node.x() >= WIDTH || node.y() <= 0 || node.y() >= region.height()) {
+                    throw new IllegalArgumentException("objectif hors de sa région : " + node.id());
+                }
+            }
+        }
         for (MapNode node : nodes.values()) {
             if (node.requires().isEmpty()) {
                 throw new IllegalArgumentException("objectif sans condition : " + node.id());
@@ -95,6 +102,7 @@ public final class MapDefinition {
                 json.get("radius").getAsInt(),
                 Integer.parseInt(json.get("color").getAsString().substring(1), 16),
                 json.has("hiddenUntilStarted") && json.get("hiddenUntilStarted").getAsBoolean(),
+                json.has("height") ? json.get("height").getAsInt() : HEIGHT,
                 nodes);
     }
 
@@ -108,6 +116,7 @@ public final class MapDefinition {
                 json.get("label").getAsString(),
                 json.get("kind").getAsString(),
                 json.get("objective").getAsString(),
+                json.has("hint") ? json.get("hint").getAsString() : null,
                 json.get("x").getAsInt(),
                 json.get("y").getAsInt(),
                 Requirement.strings(json.getAsJsonArray("after")),

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,8 @@ class ProgressTest {
                "hiddenUntilStarted": true,
                "nodes": [
                 {"id": "s", "label": "S", "kind": "", "objective": "", "x": 1, "y": 1,
-                 "requires": [{"dimension": "m:sky"}, {"picked_up": "m:feather"}, {"used": "m:stone"}, {"stat": "m:raid"}], "rewards": []}
+                 "requires": [{"dimension": "m:sky"}, {"picked_up": "m:feather"}, {"used": "m:stone"}, {"stat": "m:raid"},
+                              {"crafted": "m:boat"}], "rewards": []}
                ]}
             ]}
             """);
@@ -42,6 +44,7 @@ class ProgressTest {
         final Map<String, Integer> pickedUp = new HashMap<>();
         final Map<String, Integer> used = new HashMap<>();
         final Map<String, Integer> stats = new HashMap<>();
+        final Map<String, Integer> crafted = new HashMap<>();
 
         @Override public boolean hasAdvancement(String id) { return advancements.contains(id); }
         @Override public int killed(String entity) { return kills.getOrDefault(entity, 0); }
@@ -51,6 +54,7 @@ class ProgressTest {
         @Override public int pickedUp(String item) { return pickedUp.getOrDefault(item, 0); }
         @Override public int used(String item) { return used.getOrDefault(item, 0); }
         @Override public int customStat(String stat) { return stats.getOrDefault(stat, 0); }
+        @Override public int crafted(String item) { return crafted.getOrDefault(item, 0); }
     }
 
     @Test
@@ -127,13 +131,14 @@ class ProgressTest {
 
     @Test
     void everyStatKindCounts() {
-        for (int kind = 0; kind < 4; kind++) {
+        for (int kind = 0; kind < 5; kind++) {
             Facts facts = new Facts();
             switch (kind) {
                 case 0 -> facts.dimensions.add("m:sky");
                 case 1 -> facts.pickedUp.put("m:feather", 1);
                 case 2 -> facts.used.put("m:stone", 1);
-                default -> facts.stats.put("m:raid", 1);
+                case 3 -> facts.stats.put("m:raid", 1);
+                default -> facts.crafted.put("m:boat", 1);
             }
             Progress progress = Progress.evaluate(MAP, facts, Set.of());
             assertTrue(progress.done().contains("s"), "cas " + kind);
@@ -163,6 +168,31 @@ class ProgressTest {
         assertTrue(synced.claimable("a"));
         assertEquals(1, synced.doneCount());
         assertEquals(5, synced.totalCount());
+    }
+
+    @Test
+    void theToDoListHoldsAvailableStepsInMapOrder() {
+        assertEquals(List.of("a"), Progress.of(MAP, Set.of(), Set.of()).todo());
+        assertEquals(List.of("b", "c"), Progress.of(MAP, Set.of("a"), Set.of()).todo());
+        assertEquals(List.of("c"), Progress.of(MAP, Set.of("a", "b"), Set.of()).todo());
+        assertEquals(List.of("d"), Progress.of(MAP, Set.of("a", "b", "c"), Set.of()).todo());
+    }
+
+    @Test
+    void theToDoListKeepsHiddenRegionsSecretUntilStarted() {
+        assertFalse(Progress.of(MAP, Set.of(), Set.of()).todo().contains("s"));
+    }
+
+    @Test
+    void theToDoListCanBeNarrowedToOneRegion() {
+        Progress progress = Progress.of(MAP, Set.of("a"), Set.of());
+        assertEquals(List.of("b", "c"), progress.todo("r"));
+        assertEquals(List.of(), progress.todo("sky"));
+    }
+
+    @Test
+    void unclaimedRewardsAreListedInMapOrder() {
+        assertEquals(List.of("a", "c"), Progress.of(MAP, Set.of("c", "a", "b"), Set.of("b")).unclaimed());
     }
 
     @Test

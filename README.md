@@ -3,10 +3,13 @@
 Mod Fabric pour Minecraft 1.21.1 : une carte au trésor qui suit **ta** progression dans le modpack du
 serveur.
 
-- Clic droit avec la carte en main : la carte du monde s'ouvre, avec six régions (Terres du Milieu,
-  Mers gelées, Profondeurs, Aether, Nether, End).
-- Double-clic sur une région : ses routes d'objectifs apparaissent. Chaque ✕ est un objectif
-  (trouver une structure, battre un boss…). Réussi, il devient un sceau doré.
+- Clic droit avec la carte en main : la carte du monde s'ouvre, avec sept régions (Terres du Milieu,
+  Mers, Profondeurs, Aether, Nether, End, Forêt du Crépuscule) et 169 objectifs.
+- À droite, la liste « Que faire ? » : les récompenses à réclamer, puis tout ce que tu peux faire
+  maintenant, région par région. Un clic t'emmène sur l'objectif.
+- Double-clic sur une région : ses routes d'objectifs apparaissent (molette pour faire défiler les
+  grandes régions). Chaque ✕ est un objectif : boss, donjon, structure, mais aussi guildes de magie,
+  cuisine, pêche, primes, photos, animaux. Sa fiche dit où chercher. Réussi, il devient un sceau doré.
 - Les étapes suivantes restent dans le brouillard tant que tu n'as pas réussi celle d'avant.
 - Chaque objectif donne une récompense à réclamer depuis la carte : des ressources, ou un objet
   unique pour les boss et les épreuves finales.

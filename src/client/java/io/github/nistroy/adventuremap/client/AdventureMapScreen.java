@@ -40,8 +40,8 @@ import org.lwjgl.glfw.GLFW;
 
 /**
  * La carte ouverte : vue du monde (régions) → double-clic → vue d'une région (routes d'objectifs).
- * Carte à gauche, fiche de l'élément choisi à droite. N'a aucun état propre au joueur : tout vient
- * du serveur ({@link #update}).
+ * Carte à gauche, fiche à droite : liste « À faire » cliquable, ou fiche de l'élément choisi.
+ * N'a aucun état propre au joueur : tout vient du serveur ({@link #update}).
  */
 final class AdventureMapScreen extends Screen {
     private static final int MARGIN = 8;
@@ -50,6 +50,12 @@ final class AdventureMapScreen extends Screen {
     private static final double NODE_HIT = 34;
     /** Taille de dessin de base des ✕ et sceaux, en unités de carte. */
     private static final double NODE_SIZE = 22;
+    /** Largeur max d'une étiquette de ✕, en unités de carte (les colonnes sont à ~170). */
+    private static final double LABEL_WIDTH = 160;
+    /** Pas de molette dans une région, en unités de carte. */
+    private static final double SCROLL_STEP = 60;
+    /** Pas de molette dans la fiche, en pixels. */
+    private static final int PANEL_SCROLL_STEP = 12;
 
     private MapDefinition map;
     private Progress progress;
@@ -59,6 +65,10 @@ final class AdventureMapScreen extends Screen {
     private String openRegion;
     private String selectedRegion;
     private String selectedNode;
+    /** Défilement de la région ouverte, en unités de carte. */
+    private double scroll;
+    /** Défilement de la fiche, en pixels ; borné au dessin suivant. */
+    private int panelScroll;
 
     private Viewport view;
     private int panelLeft;
@@ -67,8 +77,15 @@ final class AdventureMapScreen extends Screen {
     private Button openButton;
     private Button claimButton;
     private final List<RewardSlot> rewardSlots = new ArrayList<>();
+    private final List<TodoLink> todoLinks = new ArrayList<>();
 
     private record RewardSlot(ItemStack stack, int x, int y) {}
+
+    private record TodoLink(String nodeId, int x, int y, int width, int height) {
+        boolean contains(double mx, double my) {
+            return mx >= x && mx < x + width && my >= y && my < y + height;
+        }
+    }
 
     AdventureMapScreen(MapDefinition map, List<String> done, List<String> claimed) {
         super(Component.translatable("item.adventuremap.adventurer_map"));
@@ -119,6 +136,19 @@ final class AdventureMapScreen extends Screen {
         if (regionId == null || progress.regionState(regionId) == RegionState.HIDDEN) return;
         openRegion = regionId;
         selectedNode = null;
+        scroll = 0;
+        panelScroll = 0;
+        refreshButtons();
+    }
+
+    /** Depuis la liste « À faire » : ouvre la région du ✕, le choisit et le fait défiler à l'écran. */
+    private void goToNode(String nodeId) {
+        Region region = map.regionOf(nodeId);
+        if (region == null) return;
+        if (!region.id().equals(openRegion)) openRegion(region.id());
+        selectedNode = nodeId;
+        scroll = clampScroll(map.node(nodeId).y() - MapDefinition.HEIGHT / 2.0);
+        panelScroll = 0;
         refreshButtons();
     }
 
@@ -126,7 +156,19 @@ final class AdventureMapScreen extends Screen {
         selectedRegion = openRegion;
         openRegion = null;
         selectedNode = null;
+        panelScroll = 0;
         refreshButtons();
+    }
+
+    private double clampScroll(double value) {
+        if (openRegion == null) return 0;
+        double max = Math.max(0, map.region(openRegion).height() - MapDefinition.HEIGHT);
+        return Math.max(0, Math.min(max, value));
+    }
+
+    /** Vue de la région ouverte (défilée), ou du monde. */
+    private Viewport mapView() {
+        return openRegion == null ? view : view.scrolled(scroll);
     }
 
     private void claim() {
@@ -139,20 +181,45 @@ final class AdventureMapScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (super.mouseClicked(mouseX, mouseY, button)) return true;
-        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT || !view.contains(mouseX, mouseY)) return false;
-        double vx = view.virtualX(mouseX), vy = view.virtualY(mouseY);
+        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
+        for (TodoLink link : todoLinks) {
+            if (link.contains(mouseX, mouseY)) {
+                goToNode(link.nodeId());
+                claimButton.active = true;
+                return true;
+            }
+        }
+        if (!view.contains(mouseX, mouseY)) return false;
+        Viewport current = mapView();
+        double vx = current.virtualX(mouseX), vy = current.virtualY(mouseY);
         if (openRegion == null) {
             String hit = regionAt(vx, vy);
             if (hit != null) {
+                if (!hit.equals(selectedRegion)) panelScroll = 0;
                 selectedRegion = hit;
                 if (doubleClick.click(hit, Util.getMillis())) openRegion(hit);
             }
         } else {
-            selectedNode = nodeAt(vx, vy);
+            String hit = nodeAt(vx, vy);
+            if (hit == null || !hit.equals(selectedNode)) panelScroll = 0;
+            selectedNode = hit;
         }
         claimButton.active = true;
         refreshButtons();
         return true;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (mouseX >= panelLeft) {
+            panelScroll = Math.max(0, panelScroll - (int) Math.round(scrollY * PANEL_SCROLL_STEP));
+            return true;
+        }
+        if (openRegion != null && view.contains(mouseX, mouseY)) {
+            scroll = clampScroll(scroll - scrollY * SCROLL_STEP);
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
@@ -207,8 +274,9 @@ final class AdventureMapScreen extends Screen {
         MapPainter.frame(g, view.left(), view.top(), view.width(), view.height(), FRAME_EDGE, 2);
         g.enableScissor(view.left(), view.top(), view.left() + view.width(), view.top() + view.height());
         MapPainter.parchment(g, view.left(), view.top(), view.width(), view.height());
-        if (openRegion == null) drawWorld(g); else drawRegion(g, map.region(openRegion));
+        if (openRegion == null) drawWorld(g); else drawRegion(g, map.region(openRegion), mapView());
         MapPainter.compass(g, font, view.x(935), view.y(525), Math.max(6, (int) (26 * view.scale())));
+        if (openRegion != null) drawScrollBar(g, map.region(openRegion));
         g.disableScissor();
 
         drawPanel(g);
@@ -267,9 +335,12 @@ final class AdventureMapScreen extends Screen {
                 view.top() + view.height() - 12, INK_SOFT, 1F);
     }
 
-    private void drawRegion(GuiGraphics g, Region region) {
-        List<Point> backdrop = Blob.outline(MapDefinition.WIDTH / 2.0, MapDefinition.HEIGHT / 2.0, 290, region.id().hashCode() * 31L);
-        MapPainter.fillShape(g, view, MapPainter.grown(backdrop, 500, 300, 3 / view.scale()), withAlpha(INK, 0x50));
+    private void drawRegion(GuiGraphics g, Region region, Viewport view) {
+        // Fond de région étiré sur toute sa hauteur : une région qui défile garde son contour.
+        double centerY = region.height() / 2.0, stretch = region.height() / (double) MapDefinition.HEIGHT;
+        List<Point> backdrop = Blob.outline(MapDefinition.WIDTH / 2.0, MapDefinition.HEIGHT / 2.0, 290, region.id().hashCode() * 31L)
+                .stream().map(p -> new Point(p.x(), centerY + (p.y() - MapDefinition.HEIGHT / 2.0) * stretch)).toList();
+        MapPainter.fillShape(g, view, MapPainter.grown(backdrop, 500, centerY, 3 / view.scale()), withAlpha(INK, 0x50));
         MapPainter.fillShape(g, view, backdrop, withAlpha(region.color(), 0x70));
 
         for (MapNode node : region.nodes()) {
@@ -280,10 +351,19 @@ final class AdventureMapScreen extends Screen {
                         parent.y() == node.y() ? 0.04 : 0, lit ? INK : withAlpha(INK_SOFT, 0x90), dot(lit ? 4 : 3), lit ? 12 : 14);
             }
         }
-        for (MapNode node : region.nodes()) drawNode(g, node);
+        for (MapNode node : region.nodes()) drawNode(g, node, view);
     }
 
-    private void drawNode(GuiGraphics g, MapNode node) {
+    private void drawScrollBar(GuiGraphics g, Region region) {
+        if (region.height() <= MapDefinition.HEIGHT) return;
+        int x = view.left() + view.width() - 4;
+        int thumb = Math.max(8, view.height() * MapDefinition.HEIGHT / region.height());
+        int y = view.top() + (int) Math.round((view.height() - thumb) * scroll / (region.height() - MapDefinition.HEIGHT));
+        g.fill(x, view.top(), x + 3, view.top() + view.height(), withAlpha(INK_SOFT, 0x40));
+        g.fill(x, y, x + 3, y + thumb, withAlpha(INK, 0xC0));
+    }
+
+    private void drawNode(GuiGraphics g, MapNode node, Viewport view) {
         int cx = view.x(node.x()), cy = view.y(node.y()), s = size(NODE_SIZE);
         if (node.id().equals(selectedNode)) MapPainter.ring(g, cx, cy, s + 4, RED);
         if (!progress.visible(node.id())) {
@@ -304,24 +384,48 @@ final class AdventureMapScreen extends Screen {
             boolean available = progress.available(node.id());
             MapPainter.cross(g, cx, cy, s * 11 / 20, dot(available ? 5 : 3), available ? RED : withAlpha(INK_SOFT, 0xA0));
         }
-        int labelY = node.y() < 250 ? cy - s - 12 : cy + s + 4;
-        MapPainter.centeredText(g, font, node.label(), cx, labelY, INK, 1F);
+        // Étiquette sous le ✕, coupée en lignes pour ne pas déborder sur la colonne voisine.
+        int lineY = cy + s + 3;
+        for (FormattedCharSequence line : font.split(Component.literal(node.label()), Math.max(40, size(LABEL_WIDTH)))) {
+            g.drawString(font, line, cx - font.width(line) / 2, lineY, INK, false);
+            lineY += font.lineHeight;
+        }
     }
 
     private void drawPanel(GuiGraphics g) {
         rewardSlots.clear();
+        todoLinks.clear();
         int x = panelLeft, top = MARGIN + BAR, bottom = height - MARGIN;
         MapPainter.frame(g, x, top, panelWidth, bottom - top, FRAME_EDGE, 2);
         g.fill(x, top, x + panelWidth, bottom, PARCHMENT);
-        PanelText text = new PanelText(g, x + 8, top + 8, panelWidth - 16);
+        // Les boutons du bas recouvrent la fiche : on coupe le texte au-dessus d'eux.
+        boolean button = openButton.visible || claimButton.visible;
+        int clipBottom = bottom - (button ? 34 : 4);
+        g.enableScissor(x, top + 2, x + panelWidth, clipBottom);
+        PanelText text = new PanelText(g, x + 8, top + 8 - panelScroll, panelWidth - 16);
+        drawPanelContent(text);
+        g.disableScissor();
+        int overflow = text.y + panelScroll - clipBottom;
+        panelScroll = Math.max(0, Math.min(panelScroll, overflow));
+        todoLinks.removeIf(link -> link.y() + link.height() <= top + 2 || link.y() >= clipBottom);
+        rewardSlots.removeIf(slot -> slot.y() + 16 <= top + 2 || slot.y() >= clipBottom);
+        if (overflow > 0) {
+            int track = clipBottom - top - 4;
+            int thumb = Math.max(8, track * track / (track + overflow));
+            int y = top + 2 + (track - thumb) * panelScroll / overflow;
+            g.fill(x + panelWidth - 4, y, x + panelWidth - 2, y + thumb, withAlpha(INK, 0xA0));
+        }
+    }
 
+    private void drawPanelContent(PanelText text) {
         if (openRegion == null) {
             Region region = selectedRegion == null ? null : map.region(selectedRegion);
             if (region == null) {
                 text.small("CARTE DU MONDE");
-                text.title("Carte de l'aventurier");
-                text.body("Chaque région a ses propres routes. Les régions où tu n'es jamais allé restent dans le brouillard.");
-                text.hint("Double-clic sur une région pour l'ouvrir.");
+                text.title("Que faire ?");
+                text.hint("Double-clic sur une région pour l'ouvrir, ou clic sur un objectif ci-dessous.");
+                drawUnclaimed(text);
+                for (Region each : map.regions()) drawTodo(text, each, true);
             } else if (progress.regionState(region.id()) == RegionState.HIDDEN) {
                 text.small("RÉGION INCONNUE");
                 text.title("? ? ?");
@@ -334,6 +438,7 @@ final class AdventureMapScreen extends Screen {
                 text.body(region.description());
                 text.pill(progress.regionState(region.id()) == RegionState.DONE ? "TERMINÉE" : done + " / " + region.nodes().size() + " SCEAUX",
                         progress.regionState(region.id()) == RegionState.DONE ? 0xFF7A5310 : RED);
+                drawTodo(text, region, false);
             }
             return;
         }
@@ -344,7 +449,10 @@ final class AdventureMapScreen extends Screen {
             text.small(region.subtitle().toUpperCase());
             text.title(region.name());
             text.body(region.description());
-            text.hint("Clique sur un ✕ pour voir l'objectif.");
+            text.hint(region.height() > MapDefinition.HEIGHT
+                    ? "Clique sur un ✕ pour voir l'objectif. Molette pour faire défiler la région."
+                    : "Clique sur un ✕ pour voir l'objectif.");
+            drawTodo(text, region, false);
             return;
         }
         if (!progress.visible(node.id())) {
@@ -356,6 +464,7 @@ final class AdventureMapScreen extends Screen {
         text.small(node.kind().toUpperCase());
         text.title(node.label());
         text.body(node.objective());
+        if (node.hint() != null && !progress.isDone(node.id())) text.hint("Où chercher : " + node.hint());
         if (progress.isDone(node.id())) {
             text.pill("RÉUSSI", 0xFF7A5310);
         } else if (progress.available(node.id())) {
@@ -370,8 +479,8 @@ final class AdventureMapScreen extends Screen {
             ItemStack stack = minecraft.level == null ? ItemStack.EMPTY : Rewards.toStack(reward, minecraft.level.registryAccess());
             int y = text.y;
             if (!stack.isEmpty()) {
-                g.renderItem(stack, text.x, y);
-                g.renderItemDecorations(font, stack, text.x, y);
+                text.g.renderItem(stack, text.x, y);
+                text.g.renderItemDecorations(font, stack, text.x, y);
                 rewardSlots.add(new RewardSlot(stack, text.x, y));
             }
             String name = reward.unique() ? reward.name() : stack.isEmpty() ? reward.item() : stack.getHoverName().getString();
@@ -379,6 +488,24 @@ final class AdventureMapScreen extends Screen {
             text.itemLine(name, reward.unique() ? PURPLE : INK);
         }
         if (progress.claimed(node.id())) text.hint("Récompense déjà réclamée.");
+    }
+
+    /** Récompenses gagnées pas encore réclamées : en tête de liste, sinon on les oublie. */
+    private void drawUnclaimed(PanelText text) {
+        List<String> unclaimed = progress.unclaimed();
+        if (unclaimed.isEmpty()) return;
+        text.rule();
+        text.small("À RÉCLAMER");
+        for (String id : unclaimed) text.link(id, "★ " + map.node(id).label(), RED);
+    }
+
+    /** Objectifs faisables maintenant ; {@code withHeader} = nom de la région au-dessus (vue du monde). */
+    private void drawTodo(PanelText text, Region region, boolean withHeader) {
+        List<String> todo = progress.todo(region.id());
+        if (todo.isEmpty()) return;
+        text.rule();
+        text.small(withHeader ? region.name().toUpperCase() : "À FAIRE ICI");
+        for (String id : todo) text.link(id, "✕ " + map.node(id).label(), INK);
     }
 
     /** Taille en pixels d'un élément donné en unités de carte, jamais sous 2 px. */
@@ -439,6 +566,18 @@ final class AdventureMapScreen extends Screen {
         void rule() {
             for (int i = 0; i < width; i += 4) g.fill(x + i, y, x + i + 2, y + 1, INK_SOFT);
             y += 6;
+        }
+
+        /** Ligne cliquable qui mène au ✕ ; soulignée au survol. */
+        void link(String nodeId, String label, int color) {
+            int start = y;
+            List<FormattedCharSequence> lines = font.split(Component.literal(label), width - 4);
+            for (FormattedCharSequence line : lines) {
+                g.drawString(font, line, x + 2, y, color, false);
+                y += font.lineHeight;
+            }
+            todoLinks.add(new TodoLink(nodeId, x, start - 1, width, y - start + 2));
+            y += 2;
         }
 
         void itemLine(String name, int color) {

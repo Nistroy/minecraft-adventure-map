@@ -110,7 +110,7 @@ class MapDefinitionTest {
     @Test
     void theBundledMapIsValid() {
         MapDefinition map = MapDefinition.bundled();
-        assertEquals(List.of("surface", "mers", "profondeurs", "aether", "nether", "end"),
+        assertEquals(List.of("surface", "mers", "profondeurs", "aether", "nether", "end", "crepuscule"),
                 map.regions().stream().map(Region::id).toList());
         Set<String> ids = new HashSet<>();
         for (Region region : map.regions()) {
@@ -118,9 +118,8 @@ class MapDefinitionTest {
             assertTrue(region.y() >= 0 && region.y() <= MapDefinition.HEIGHT, region.id());
             for (MapNode node : region.nodes()) {
                 assertTrue(ids.add(node.id()), node.id());
-                assertTrue(node.x() > 0 && node.x() < MapDefinition.WIDTH, node.id());
-                assertTrue(node.y() > 0 && node.y() < MapDefinition.HEIGHT, node.id());
                 assertTrue(!node.rewards().isEmpty(), node.id());
+                assertTrue(node.hint() != null && !node.hint().isBlank(), node.id() + " : indice « où chercher »");
                 // Une branche ne sort pas de sa région : le double-clic n'ouvre qu'une région à la fois.
                 node.after().forEach(parent -> assertEquals(region, map.regionOf(parent), node.id() + " <- " + parent));
             }

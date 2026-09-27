@@ -36,6 +36,7 @@ final class MapCheck {
                     case Requirement.Dimension d -> check(unknown, "dimension", d.id(), id -> dimensions.contains(id.toString()));
                     case Requirement.PickedUp p -> check(unknown, "objet", p.item(), BuiltInRegistries.ITEM::containsKey);
                     case Requirement.Used u -> check(unknown, "objet", u.item(), BuiltInRegistries.ITEM::containsKey);
+                    case Requirement.Crafted c -> check(unknown, "objet", c.item(), BuiltInRegistries.ITEM::containsKey);
                     case Requirement.CustomStat c -> check(unknown, "stat", c.id(), BuiltInRegistries.CUSTOM_STAT::containsKey);
                     case Requirement.Nodes ignored -> { }
                 }

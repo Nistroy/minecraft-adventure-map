@@ -17,4 +17,6 @@ public interface PlayerFacts {
     int used(String item);
 
     int customStat(String stat);
+
+    int crafted(String item);
 }

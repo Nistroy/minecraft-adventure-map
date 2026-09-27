@@ -66,6 +66,14 @@ final class ServerFacts implements PlayerFacts {
                 .orElse(0);
     }
 
+    @Override
+    public int crafted(String item) {
+        return location(item)
+                .flatMap(BuiltInRegistries.ITEM::getOptional)
+                .map(value -> player.getStats().getValue(Stats.ITEM_CRAFTED, value))
+                .orElse(0);
+    }
+
     // StatType garde ses stats par identité : il faut l'instance enregistrée, pas un ResourceLocation égal.
     @Override
     public int customStat(String stat) {

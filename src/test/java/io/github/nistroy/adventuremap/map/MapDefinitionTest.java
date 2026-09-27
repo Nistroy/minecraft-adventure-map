@@ -15,15 +15,15 @@ import org.junit.jupiter.api.Test;
 class MapDefinitionTest {
     private static final String TINY = """
             {"regions": [{"id": "r", "name": "Région", "subtitle": "Sous-titre", "description": "Desc",
-              "x": 10, "y": 20, "radius": 30, "color": "#bcc289", "hiddenUntilStarted": true,
+              "x": 10, "y": 20, "radius": 30, "color": "#bcc289", "hiddenUntilStarted": true, "height": 900,
               "nodes": [
-                {"id": "a", "label": "A", "kind": "Étape", "objective": "Faire A", "x": 1, "y": 2,
+                {"id": "a", "label": "A", "kind": "Étape", "objective": "Faire A", "hint": "Par là", "x": 1, "y": 2,
                  "requires": [{"advancement": "minecraft:story/root"}, {"killed": "minecraft:zombie"}],
                  "rewards": [{"item": "minecraft:diamond", "count": 3}]},
                 {"id": "b", "label": "B", "kind": "Boss", "objective": "Faire B", "x": 3, "y": 4, "after": ["a"],
                  "requires": [{"visited": ["x:one", "x:two"], "count": 2}, {"dimension": "minecraft:the_nether"},
                               {"picked_up": "minecraft:elytra"}, {"used": "waystones:waystone"},
-                              {"stat": "minecraft:raid_win"}, {"nodes": ["a"]}],
+                              {"stat": "minecraft:raid_win"}, {"nodes": ["a"]}, {"crafted": "motorboat:motorboat"}],
                  "rewards": [{"item": "minecraft:diamond_sword", "name": "Lame", "lore": ["l1", "l2"],
                               "enchantments": {"minecraft:sharpness": 5, "minecraft:looting": 3}}]}
               ]}]}
@@ -38,13 +38,16 @@ class MapDefinitionTest {
         assertEquals(0xbcc289, region.color());
         assertTrue(region.hiddenUntilStarted());
         assertEquals(30, region.radius());
+        assertEquals(900, region.height());
 
         MapNode a = map.node("a");
+        assertEquals("Par là", a.hint());
         assertEquals(List.of(), a.after());
         assertEquals(List.of(new Requirement.Advancement("minecraft:story/root"), new Requirement.Killed("minecraft:zombie")), a.requires());
         assertEquals(new Reward("minecraft:diamond", 3, null, List.of(), Map.of()), a.rewards().get(0));
 
         MapNode b = map.node("b");
+        assertNull(b.hint());
         assertEquals(List.of("a"), b.after());
         assertEquals(new Requirement.Visited(List.of("x:one", "x:two"), 2), b.requires().get(0));
         assertEquals(new Requirement.Dimension("minecraft:the_nether"), b.requires().get(1));
@@ -52,6 +55,7 @@ class MapDefinitionTest {
         assertEquals(new Requirement.Used("waystones:waystone"), b.requires().get(3));
         assertEquals(new Requirement.CustomStat("minecraft:raid_win"), b.requires().get(4));
         assertEquals(new Requirement.Nodes(List.of("a")), b.requires().get(5));
+        assertEquals(new Requirement.Crafted("motorboat:motorboat"), b.requires().get(6));
         Reward sword = b.rewards().get(0);
         assertEquals("Lame", sword.name());
         assertTrue(sword.unique());
@@ -60,6 +64,18 @@ class MapDefinitionTest {
         assertEquals(List.of("minecraft:sharpness", "minecraft:looting"), List.copyOf(sword.enchantments().keySet()));
         assertNull(map.node("nope"));
         assertEquals(region, map.regionOf("b"));
+    }
+
+    @Test
+    void regionHeightDefaultsToTheWorldMapHeight() {
+        String json = TINY.replace(", \"height\": 900", "");
+        assertEquals(MapDefinition.HEIGHT, MapDefinition.parse(json).regions().get(0).height());
+    }
+
+    @Test
+    void rejectsNodesOutsideTheirRegion() {
+        assertThrows(IllegalArgumentException.class, () -> MapDefinition.parse(TINY.replace("\"x\": 3, \"y\": 4", "\"x\": 3, \"y\": 901")));
+        assertThrows(IllegalArgumentException.class, () -> MapDefinition.parse(TINY.replace("\"x\": 3, \"y\": 4", "\"x\": 1001, \"y\": 4")));
     }
 
     @Test

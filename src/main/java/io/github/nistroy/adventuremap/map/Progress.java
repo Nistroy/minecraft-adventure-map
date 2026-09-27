@@ -1,6 +1,8 @@
 package io.github.nistroy.adventuremap.map;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -73,6 +75,27 @@ public final class Progress {
 
     public boolean claimable(String id) {
         return done.contains(id) && !claimed.contains(id);
+    }
+
+    /** Liste « À faire » : objectifs faisables maintenant, dans l'ordre de la carte. Une région cachée garde son secret. */
+    public List<String> todo() {
+        List<String> ids = new ArrayList<>();
+        for (Region region : map.regions()) ids.addAll(todo(region.id()));
+        return ids;
+    }
+
+    public List<String> todo(String regionId) {
+        if (regionState(regionId) == RegionState.HIDDEN) return List.of();
+        return map.region(regionId).nodes().stream().map(MapNode::id).filter(this::available).toList();
+    }
+
+    /** Récompenses gagnées pas encore réclamées, dans l'ordre de la carte. */
+    public List<String> unclaimed() {
+        List<String> ids = new ArrayList<>();
+        for (MapNode node : map.nodes()) {
+            if (claimable(node.id())) ids.add(node.id());
+        }
+        return ids;
     }
 
     public int unclaimedCount() {

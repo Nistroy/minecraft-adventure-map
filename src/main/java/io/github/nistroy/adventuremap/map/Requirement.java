@@ -70,6 +70,14 @@ public sealed interface Requirement {
         }
     }
 
+    /** Stat « fabriqué » : compte la table de craft, pas les objets trouvés. */
+    record Crafted(String item) implements Requirement {
+        @Override
+        public boolean isMet(PlayerFacts facts, Set<String> doneNodes) {
+            return facts.crafted(item) > 0;
+        }
+    }
+
     /** Épreuve finale : toutes les étapes listées sont réussies. */
     record Nodes(List<String> ids) implements Requirement {
         public Nodes {
@@ -93,6 +101,7 @@ public sealed interface Requirement {
         if (json.has("picked_up")) return new PickedUp(json.get("picked_up").getAsString());
         if (json.has("used")) return new Used(json.get("used").getAsString());
         if (json.has("stat")) return new CustomStat(json.get("stat").getAsString());
+        if (json.has("crafted")) return new Crafted(json.get("crafted").getAsString());
         if (json.has("nodes")) return new Nodes(strings(json.getAsJsonArray("nodes")));
         throw new IllegalArgumentException("condition inconnue : " + json);
     }

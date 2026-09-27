@@ -10,7 +10,7 @@ pour agents, sauf `README.md` (humains).
   - `map/` (pur, testé) — `MapDefinition` lit/valide le JSON · `Region`, `MapNode`, `Reward` ·
     `Requirement` (une façon de réussir, les alternatives d'un objectif sont en OU) · `PlayerFacts`
     (ce que le serveur sait d'un joueur) · `Progress` (réussis, visibles, disponibles, réclamables,
-    état de région ; même code serveur et client).
+    état de région, liste « À faire » `todo()`, `unclaimed()` ; même code serveur et client).
   - `geometry/` (pur, testé) — `Blob` contour de région, `Polygon` remplissage par lignes + clic,
     `Curve` pointillés, `DoubleClick`.
   - `server/` — `PlayerRecord` données par joueur (attachment Fabric persistant, `copyOnDeath`,
@@ -22,10 +22,13 @@ pour agents, sauf `README.md` (humains).
   - `AdventureMap` entrée + registres · `AdventureMapItem` · `Rewards` récompense → `ItemStack` ·
     `MapCheck` identifiants inconnus listés au démarrage.
 - `src/client/java/.../client/` — `AdventureMapScreen` écran (monde → double-clic → région, fiche à
-  droite) · `MapPainter` dessin (le GUI ne fait que rectangles + textures) · `Viewport` repère
-  1000 × 600 ↔ pixels GUI · `AdventureMapClient` réception de l'état.
-- `src/main/resources/adventuremap/default_map.json` — **la carte** : 6 régions, 36 objectifs,
-  récompenses. Surchargée par `config/adventuremap/map.json` du serveur si présent (pas besoin de
+  droite = liste « À faire » cliquable ; molette = défilement région/fiche) · `MapPainter` dessin (le
+  GUI ne fait que rectangles + textures) · `Viewport` repère 1000 × 600 ↔ pixels GUI, `scrollY` · `AdventureMapClient` réception de l'état.
+- `src/main/resources/adventuremap/default_map.json` — **la carte** : 7 régions, 169 objectifs
+  (v0.2.0), récompenses. Par objectif : `hint` (où chercher, requis par les tests). Par région :
+  `height` (> 600 → défile). Colonnes x ≈ 80/250/420/590/760/920, lignes y = 70 + 108·n.
+  Conditions : `advancement`, `killed`, `visited` (+`count`), `dimension`, `picked_up`, `used`,
+  `crafted`, `stat`, `nodes`. Surchargée par `config/adventuremap/map.json` du serveur si présent (pas besoin de
   nouvelle version pour régler objectifs/récompenses ; le client reçoit le JSON du serveur).
 - `tools/generate_textures.py` — parchemin, brouillard, sceau, sprite **provisoire** de l'objet.
 
@@ -41,13 +44,30 @@ pour agents, sauf `README.md` (humains).
 - Carte donnée à la 1re connexion (`map_given`).
 - Récompenses uniques v0.1 = objets vanilla nommés + histoire + enchantements, sans pouvoir.
 
+## Décisions v0.2 (nistroy 2026-09-27)
+- Enrichir les 6 régions ; seule nouvelle région = nouvelle dimension : Forêt du Crépuscule.
+- Anti « je sais pas quoi faire » : liste « À faire » + indice par objectif. Pas de compteurs ni paliers.
+- Contenu hors aventure accepté : guildes (RPG Series), vie quotidienne (Farmer's Delight, Tide,
+  Bountiful, sac), collection (Exposure, Lootr, Naturalist).
+- Aether plus `hiddenUntilStarted` : la liste doit montrer le portail.
+- Une seule entrée par région (test) ; `after` jamais vers une autre région.
+- Finales Mers/Profondeurs/End plus exigeantes qu'en v0.1 : sceau perdu tant que non refait,
+  réclamation jamais doublée (`claimed` gardé).
+- Annihilation : seul le progrès vanilla (tueur) compte ; l'entité est une vache-hitbox taguée.
+
 ## Identifiants (relevés dans les jars de `minecraft-server/server/mods`, 2026-09-24)
 - YUNG's renomme : forteresse `betterfortresses:fortress`, monument
   `betteroceanmonuments:ocean_monument`, donjons `betterdungeons:*` (on garde aussi l'id vanilla).
 - Dungeons and Taverns = namespace `nova_structures`. Tidal Towns = `joshie:village_ocean`.
 - Boss : `bosses_of_mass_destruction:{lich,gauntlet,void_blossom,obsidilith}`,
-  `aquamirae:captain_cornelia`, `aether:{slider,valkyrie_queen,sun_spirit}`.
-- Dimensions : `aether:the_aether`, `deeperdarker:otherside`.
+  `aquamirae:{captain_cornelia,maze_mother}`, `aether:{slider,valkyrie_queen,sun_spirit}`,
+  `soulsweapons:{accursed_lord_boss,night_shade,returning_knight,moonknight,chaos_monarch,day_stalker,night_prowler}`,
+  `friendsandfoes:{wildfire,iceologer,illusioner}`,
+  `twilightforest:{naga,lich,minoshroom,hydra,knight_phantom,ur_ghast,alpha_yeti,snow_queen}`.
+- Mini-boss D&T et boss Incendium = mobs vanilla tagués → progrès seulement.
+- Dimensions : `aether:the_aether`, `deeperdarker:otherside`, `twilightforest:twilight_forest`.
+- 2026-09-27 : tous les ids de la carte comparés aux jars du live + TF `4.8.629` → 0 inconnu. TF
+  absent du live tant que `minecraft-server#52` n'est pas déployé.
 - `runServer` sans les mods : ~100 identifiants inconnus attendus (tous modés), 0 vanilla.
 
 ## Tests — TDD obligatoire
@@ -69,5 +89,5 @@ pour agents, sauf `README.md` (humains).
   `minecraft-server`).
 
 ## Non vérifiable sans joueur humain
-Rendu de l'écran, double-clic, réclamation, don de la carte à la connexion, annonces, `/carte`
+Rendu de l'écran (étiquettes qui se chevauchent, défilement, liste « À faire »), double-clic, réclamation, don de la carte à la connexion, annonces, `/carte`
 (exige un joueur), repérage des structures.
